@@ -39,5 +39,58 @@ module.exports = {
             }).catch(err => {
                 throw err;
             });
+    },
+
+    getIdModerator: function (attributes) {
+        const sql = "SELECT id FROM Moderator WHERE idGuild=$1 AND idMember=$2";
+        const values = [
+            attributes["idGuild"],
+            attributes["idModerator"]
+        ];
+
+        return client.query(sql, values)
+            .then(res => {
+                return res.rows[0]["id"];
+            })
+            .catch(e => console.error(e.stack))
+    },
+
+    createSanction: function (attributes) {
+        this.getIdModerator(attributes)
+            .then(idModerator => {
+                console.log(idModerator);
+
+                const sql = "INSERT INTO Sanction (idModerator, idGuild, idChannel, idMember, name, reason, startDate, endDate) VALUES($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *";
+                const values = [
+                    idModerator,
+                    attributes["idGuild"],
+                    attributes["idChannel"],
+                    attributes["idMember"],
+                    attributes["name"]
+                ];
+
+                let reason = attributes["reason"];
+                //Check if there is a reason
+                if ( reason != null ) { values.push(reason);  }
+                else { values.push(null); }
+
+                //Add startDate of sanction
+                values.push("NOW()");
+
+                let duration = attributes["duration"];
+                //Check if there is a duration
+                //TODO: error: invalid input syntax for type timestamp: "NOW()+'30d'"
+                if ( duration != null ) { values.push(null); }
+                else { values.push(null); }
+
+                //console.log(values);
+
+                //Create sanction with INSERT
+                client.query(sql, values)
+                    .then(res => {
+                        //console.log(res.rows[0]);
+                    })
+                    .catch(e => console.error(e.stack))
+            })
     }
 };

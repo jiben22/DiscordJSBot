@@ -14,14 +14,14 @@ module.exports = {
 
     message: function () {
         client.on('message', msg => {
+            ///avertir @jiben22#1522 "Parce que" +30d
+
             //It's command
-            if ( msg.content.startsWith('/') ) {
+            if ( msg.content.match('^\\/') ) {
                 //Get names permission
                 db.getNamesPermission()
                     .then( namesPermission => {
                         let namePermissionMsg = msg.content.substring(1).split(' ')[0].toUpperCase();
-
-                        console.log(namePermissionMsg);
 
                         if ( namesPermission.some(item => item.name === namePermissionMsg) ) {
                             //Delete message
@@ -31,20 +31,32 @@ module.exports = {
                             db.moderatorCanExecutePermission(msg.guild.id, msg.author.id, msg.channel.id, namePermissionMsg )
                                 .then( results => {
 
+                                    console.log(msg.content);
+
+                                    //Get reason if exist and remove first and last "
+                                    let reason = msg.content.match('".*"')[0].slice(1,-1);
+                                    let duration = msg.content.match('\\+[0-9]*[smhdwMY]')[0].substring(1);
+
+                                    //Get all attributes for Sanction
+                                    let attributes = this.getAttributesForSanction(msg, msg.member.id, namePermissionMsg, reason, duration);
+
                                     //Moderator can execute the command
                                     if( results.length > 0) {
                                         switch (namePermissionMsg) {
                                             case "AVERTIR":
+                                                this.avertir(msg, attributes);
                                                 break;
                                             case "BAN":
-                                                ban(msg);
+                                                this.ban(msg, attributes);
                                                 break;
                                             case "EXCLURE":
-                                                kick(msg);
+                                                this.exclure(msg, attributes);
                                                 break;
                                             case "MUET":
+                                                this.muet(msg, attributes);
                                                 break;
                                             case "SOURD":
+                                                this.sourd(msg, attributes);
                                                 break;
                                         }
                                     } else {
@@ -76,8 +88,40 @@ module.exports = {
         return isMemberMentionned;
     },
 
-    ban: function (msg) {
-        if( checkMemberMentionned ) {
+    avertir: function(msg, attributes) {
+        //Check if a member is mentionned
+        if( this.checkMemberMentionned(msg) ) {
+            let memberMentionned = msg.guild.member(msg.mentions.users.first());
+
+            //Create sanction
+            db.createSanction(attributes);
+
+            //Warn the member
+            let warn_embed = new Discord.RichEmbed()
+                .setColor("#a46104")
+                .setTitle("AVERTIR :")
+                .addField("Membre averti:", `${memberMentionned.user.username}`);
+
+            //Check if reason is not null
+            let reason = attributes["reason"];
+            if ( reason.length > 0 ) { warn_embed.addField("Raison :", reason); }
+
+            //Check if duration is not null
+            let duration = attributes["duration"];
+            if ( duration.length > 0 ) { warn_embed.addField("Durée :", "?"); }
+
+            warn_embed.addField("Guild :", `${client.guilds.get(msg.guild.id).name}`)
+                .addField("Channel :", `${client.guilds.get(msg.guild.id).channels.get(msg.channel.id).name}`)
+                .addField("Modérateur :", `${msg.author.username}`);
+
+            //Send warn message in DM
+            memberMentionned.send(warn_embed);
+        }
+    },
+
+    ban: function (msg, attributes) {
+        //Check if a member is mentionned
+        if( this.checkMemberMentionned(msg) ) {
             let memberMentionned = msg.guild.member(msg.mentions.users.first());
 
             //Ban the member
@@ -94,24 +138,74 @@ module.exports = {
         }
     },
 
-    kick: function (msg) {
-        console.log("KICK");
-
-        if( checkMemberMentionned ) {
+    exclure: function (msg) {
+        //Check if a member is mentionned
+        if( this.checkMemberMentionned(msg) ) {
             let memberMentionned = msg.guild.member(msg.mentions.users.first());
             let reason = "REASON";
 
+            //Kick the member
             memberMentionned.kick(reason)
                 .then(member => {
-                    let ban_embed = new Discord.RichEmbed()
+                    let kick_embed = new Discord.RichEmbed()
                         .setColor("#40A497")
                         .setTitle("EXCLURE :")
                         .addField("Membre exclu:", `${member.user.username}`)
                         .addField("Raison :", reason)
                         .addField("ID :", `${member.user.id}`)
                         .addField("Modérateur :", `${msg.author.username}`);
-                    client.guilds.get(msg.guild.id).channels.get(msg.channel.id).send(ban_embed);
+                    client.guilds.get(msg.guild.id).channels.get(msg.channel.id).send(kick_embed);
                 });
         }
+    },
+
+    muet: function (msg, attributes) {
+        //Check if a member is mentionned
+        if( this.checkMemberMentionned(msg) ) {
+            let memberMentionned = msg.guild.member(msg.mentions.users.first());
+
+            //Mute the member
+            memberMentionned.mute()
+                .then(() => {
+                    let muet_msg = memberMentionned + " vous êtes muet";
+
+                    //Check if duration is not null
+                    let duration = attributes["duration"];
+                    if ( duration != null ) { muet_msg += " pendant " + duration; }
+
+                    //Send message
+                    msg.channel.send( muet_msg );
+                })
+        }
+    },
+
+    sourd: function (msg, attributes) {
+        //Check if a member is mentionned
+        if( this.checkMemberMentionned(msg) ) {
+            let memberMentionned = msg.guild.member(msg.mentions.users.first());
+
+            //Deaf
+            memberMentionned.deaf()
+                .then(() => {
+                    //TODO: send DM to user
+                    msg.channel.send(memberMentionned + " vous êtes mis en sourdine pendant ?");
+                });
+        }
+    },
+
+    getAttributesForSanction: function (msg, idMember, namePermissionMsg, reason, duration) {
+        let idModerator = msg.author.id;
+        let idGuild = msg.guild.id;
+        let idChannel = msg.channel.id;
+
+        return {
+            idModerator: idModerator,
+            idGuild: idGuild,
+            idChannel: idChannel,
+            idMember: idMember,
+            name: namePermissionMsg,
+            reason: reason,
+            duration: duration
+        };
     }
 };
