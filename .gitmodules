@@ -1,0 +1,4 @@
+[submodule "DashboardBotDiscord"]
+	path = DashboardBotDiscord
+	url = https://github.com/jiben22/DashboardBotDiscord
+	branch = master
