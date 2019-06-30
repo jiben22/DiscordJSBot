@@ -187,7 +187,6 @@ module.exports = {
             //Deaf
             memberMentionned.deaf()
                 .then(() => {
-                    //TODO: send DM to user
                     msg.channel.send(memberMentionned + " vous êtes mis en sourdine pendant ?");
                 });
         }
